@@ -4,31 +4,23 @@ header("Access-Control-Allow-Headers: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json");
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit;
-}
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 
-// LÊ O JSON CORRETAMENTE
 $input = json_decode(file_get_contents("php://input"), true);
 
 if (!$input || !isset($input['endpoint']) || !isset($input['keys'])) {
-    echo json_encode([
-        "sucesso" => false,
-        "erro" => "Dados incompletos",
-        "input_recebido" => $input
-    ]);
+    echo json_encode(["sucesso" => false, "erro" => "Dados incompletos"]);
     exit;
 }
 
-$usuario = $input['usuario'] ?? null;
 $endpoint = $input['endpoint'];
 $keys = $input['keys'];
 
-// 1) ENVIA PARA O PUSHPAD
 $payload = [
     "subscription" => [
         "endpoint" => $endpoint,
-        "keys" => $keys
+        "keys" => $keys,
+        "project_id" => 9082
     ]
 ];
 
@@ -47,24 +39,11 @@ curl_close($ch);
 $obj = json_decode($resp, true);
 
 if (!isset($obj["id"])) {
-    echo json_encode([
-        "sucesso" => false,
-        "erro" => "Pushpad recusou",
-        "resposta" => $obj
-    ]);
+    echo json_encode(["sucesso" => false, "erro" => "Pushpad recusou", "resposta" => $obj]);
     exit;
 }
 
-$push_user_id = $obj["id"];
-
-// 2) SALVAR NO BANCO (opcional)
-// aqui será adicionado depois
-
 echo json_encode([
     "sucesso" => true,
-    "push_user_id" => $push_user_id,
-    "debug" => [
-        "endpoint" => $endpoint,
-        "keys" => $keys
-    ]
+    "push_user_id" => $obj["id"]
 ]);
