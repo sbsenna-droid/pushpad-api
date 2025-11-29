@@ -1,60 +1,70 @@
 <?php
-
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: *");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json");
 
-// ---------------------------------------------------
-// LER JSON DO FRONT
-// ---------------------------------------------------
-$data = json_decode(file_get_contents("php://input"), true);
-
-$endpoint = $data["endpoint"] ?? null;
-$keys     = $data["keys"] ?? null;
-$usuario  = $data["usuario"] ?? null;
-
-if (!$endpoint || !$keys || !$usuario) {
-    echo json_encode(["erro" => "Dados incompletos"]);
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// ---------------------------------------------------
-// CRIAR PAYLOAD PARA PUSHPAD
-// ---------------------------------------------------
+// LÊ O JSON CORRETAMENTE
+$input = json_decode(file_get_contents("php://input"), true);
+
+if (!$input || !isset($input['endpoint']) || !isset($input['keys'])) {
+    echo json_encode([
+        "sucesso" => false,
+        "erro" => "Dados incompletos",
+        "input_recebido" => $input
+    ]);
+    exit;
+}
+
+$usuario = $input['usuario'] ?? null;
+$endpoint = $input['endpoint'];
+$keys = $input['keys'];
+
+// 1) ENVIA PARA O PUSHPAD
 $payload = [
     "subscription" => [
         "endpoint" => $endpoint,
-        "keys" => [
-            "p256dh" => $keys["p256dh"] ?? "",
-            "auth"   => $keys["auth"] ?? ""
-        ]
+        "keys" => $keys
     ]
 ];
 
-$ch = curl_init("https://api.pushpad.xyz/subscriptions");
-
-curl_setopt($ch, CURLOPT_USERPWD, "8xS6g1Dp3mVy0AEqIR2dGi1MhP9omB3izCOf9jop:");
+$ch = curl_init("https://pushpad.xyz/api/v1/subscriptions");
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Content-Type: application/json",
+    "Authorization: Token token=8xS6g1Dp3mVy0AEqIR2dGi1MhP9omB3izCOf9jop"
+]);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
-// Fixes importantes
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-
-$res = curl_exec($ch);
-$http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
+$resp = curl_exec($ch);
 curl_close($ch);
 
-if ($http !== 201) {
-    echo json_encode(["erro" => "falha_pushpad", "http" => $http, "res" => $res]);
+$obj = json_decode($resp, true);
+
+if (!isset($obj["id"])) {
+    echo json_encode([
+        "sucesso" => false,
+        "erro" => "Pushpad recusou",
+        "resposta" => $obj
+    ]);
     exit;
 }
 
-$sub = json_decode($res, true);
+$push_user_id = $obj["id"];
+
+// 2) SALVAR NO BANCO (opcional)
+// aqui será adicionado depois
 
 echo json_encode([
     "sucesso" => true,
-    "push_user_id" => $sub["id"],
-    "usuario" => $usuario
+    "push_user_id" => $push_user_id,
+    "debug" => [
+        "endpoint" => $endpoint,
+        "keys" => $keys
+    ]
 ]);
